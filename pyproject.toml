@@ -1,0 +1,13 @@
+[project]
+name = "tree-image-search"
+version = "0.1.0"
+description = "Hệ CSDL lưu trữ và tìm kiếm ảnh cây"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*"]

@@ -1,0 +1,43 @@
+# ============================================================
+# default.yaml — Cấu hình toàn hệ thống
+# Override bằng biến môi trường: TREE_SEARCH_<KEY>=value
+# ============================================================
+
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  features_dir: data/features
+  thumbnails_dir: data/thumbnails
+  image_size: [512, 512]        # (width, height) sau preprocessing
+  thumbnail_size: [128, 128]
+  image_format: jpg
+
+ingestion:
+  min_image_size: 300           # pixel, cạnh ngắn nhất
+  min_green_ratio: 0.05         # tối thiểu 5% pixel màu xanh lá
+  max_width_height_ratio: 1.5   # loại ảnh quang cảnh ngang
+  hash_threshold: 8             # perceptual hash diff để detect duplicate
+
+storage:
+  db_path: data/tree_search.db
+  faiss_index_path: data/features/faiss.index
+  features_path: data/features/features.npy
+  image_ids_path: data/features/image_ids.npy
+  # Để nâng cấp lên MongoDB/Milvus, chỉ cần đổi backend ở đây
+  backend: sqlite               # sqlite | postgres | mongodb (future)
+  vector_backend: faiss         # faiss | milvus | qdrant (future)
+
+search:
+  top_k: 5
+  metric: cosine                # cosine | euclidean | weighted
+  # Trọng số cho weighted metric (tổng = 1.0)
+  feature_weights:
+    geometry: 0.25
+    color: 0.35
+    texture: 0.20
+    shape: 0.20
+
+api:
+  host: 0.0.0.0
+  port: 8000
+  max_upload_size_mb: 10

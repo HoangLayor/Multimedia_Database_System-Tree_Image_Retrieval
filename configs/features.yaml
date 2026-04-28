@@ -1,0 +1,137 @@
+# ============================================================
+# features.yaml — Định nghĩa 21 features (4 nhóm)
+# Dùng để tự động hóa extraction và document hóa
+# ============================================================
+
+groups:
+  geometry:
+    description: "Cấu trúc hình học của cây"
+    features:
+      - name: height_width_ratio
+        description: "Tỉ lệ cao/rộng của bounding box tán cây"
+        method: contour_bbox
+        range: [0.1, 10.0]
+
+      - name: canopy_density
+        description: "Tỉ lệ pixel xanh trong vùng tán / tổng diện tích tán"
+        method: green_mask_ratio
+        range: [0.0, 1.0]
+
+      - name: trunk_width_ratio
+        description: "Tỉ lệ chiều rộng thân / chiều rộng ảnh (thay cho đường kính tuyệt đối)"
+        method: horizontal_projection
+        range: [0.0, 1.0]
+        note: "Dùng ratio thay vì pixel tuyệt đối để scale-invariant"
+
+      - name: canopy_symmetry
+        description: "Mức độ đối xứng trái-phải của tán cây"
+        method: fft_symmetry
+        range: [0.0, 1.0]
+
+      - name: branch_angle_variance
+        description: "Độ biến thiên góc của các nhánh chính"
+        method: skeleton_angles_std
+        range: [0.0, 180.0]
+        note: "Chỉ reliable với cây rụng lá; bỏ qua nếu canopy_density > 0.7"
+
+  color:
+    description: "Đặc trưng màu sắc (HSV space)"
+    features:
+      - name: primary_green_hue
+        description: "Hue trung bình của vùng lá (H channel HSV)"
+        method: masked_mean_hue
+        range: [35, 85]
+
+      - name: green_saturation
+        description: "Độ bão hòa xanh trung bình (S channel HSV)"
+        method: masked_mean_sat
+        range: [0.0, 1.0]
+
+      - name: leaf_color_variance
+        description: "Độ lệch chuẩn của cường độ xanh"
+        method: green_channel_std
+        range: [0.0, 128.0]
+
+      - name: brown_gray_ratio
+        description: "Tỉ lệ pixel màu nâu+xám (thân, cành) / tổng"
+        method: brown_gray_mask_ratio
+        range: [0.0, 1.0]
+
+      - name: color_hist_bin_1
+        description: "Bin 1 của HSV histogram (hue 0-36)"
+        method: hsv_histogram
+        range: [0.0, 1.0]
+
+      - name: color_hist_bin_2
+        description: "Bin 2 (hue 36-72)"
+        method: hsv_histogram
+        range: [0.0, 1.0]
+
+      - name: color_hist_bin_3
+        description: "Bin 3 (hue 72-108)"
+        method: hsv_histogram
+        range: [0.0, 1.0]
+
+      - name: color_hist_bin_4
+        description: "Bin 4 (hue 108-144)"
+        method: hsv_histogram
+        range: [0.0, 1.0]
+
+      - name: color_hist_bin_5
+        description: "Bin 5 (hue 144-180)"
+        method: hsv_histogram
+        range: [0.0, 1.0]
+
+  texture:
+    description: "Texture và pattern của lá/tán"
+    features:
+      - name: texture_coarseness
+        description: "Độ thô của texture lá (LBP mean)"
+        method: lbp_mean
+        range: [0.0, 255.0]
+
+      - name: contour_complexity
+        description: "Độ phức tạp đường viền tán (Fourier descriptor norm)"
+        method: fourier_descriptor_norm
+        range: [0.0, 1.0]
+
+      - name: edge_density
+        description: "Tỉ lệ edge pixel / tổng pixel (Canny)"
+        method: canny_edge_ratio
+        range: [0.0, 1.0]
+
+      - name: texture_entropy
+        description: "Shannon entropy của LBP histogram"
+        method: lbp_entropy
+        range: [0.0, 8.0]
+
+  shape:
+    description: "Hình dạng toàn cục bất biến với phép biến đổi"
+    features:
+      - name: hu_moment_1
+        description: "Hu moment bậc 1 (log-transform)"
+        method: hu_moments
+        range: [-20.0, 0.0]
+
+      - name: hu_moment_2
+        description: "Hu moment bậc 2 (log-transform)"
+        method: hu_moments
+        range: [-20.0, 0.0]
+
+      - name: hu_moment_3
+        description: "Hu moment bậc 3 (log-transform)"
+        method: hu_moments
+        range: [-20.0, 0.0]
+
+      - name: solidity
+        description: "Diện tích thực / diện tích convex hull"
+        method: contour_solidity
+        range: [0.0, 1.0]
+
+      - name: circularity
+        description: "4π × Area / Perimeter² (1.0 = hình tròn hoàn hảo)"
+        method: contour_circularity
+        range: [0.0, 1.0]
+
+total_dimensions: 21
+note: "Pipeline hiện tại: 5 + 9 + 4 + 3 = 21 (không phải 17 như tên gọi ban đầu)"
