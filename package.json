@@ -1,0 +1,21 @@
+{
+  "name": "crawl-image",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "crawl": "bun run index.ts",
+    "dev": "bun --hot run server.ts",
+    "start": "NODE_ENV=production PORT=3011 bun run server.ts",
+    "smart-crop": "bun run smart-crop.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.13"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "sharp": "^0.34.5"
+  }
+}
