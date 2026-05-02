@@ -44,9 +44,6 @@ db.exec(`
 
 const cols = db.prepare(`PRAGMA table_info(images)`).all() as { name: string }[];
 const colNames = new Set(cols.map((c) => c.name));
-if (!colNames.has("deleted_at")) {
-  db.exec(`ALTER TABLE images ADD COLUMN deleted_at TEXT`);
-}
 if (!colNames.has("crop_filename")) {
   db.exec(`ALTER TABLE images ADD COLUMN crop_filename TEXT`);
 }
@@ -62,7 +59,6 @@ if (!colNames.has("crop_size")) {
 if (!colNames.has("tree_box_json")) {
   db.exec(`ALTER TABLE images ADD COLUMN tree_box_json TEXT`);
 }
-db.exec(`CREATE INDEX IF NOT EXISTS idx_images_deleted_at ON images(deleted_at)`);
 
 async function downloadImage(id: number, downloadLink: string) {
   const res = await fetch(downloadLink, {
@@ -119,24 +115,6 @@ async function downloadMany(ids: number[]) {
   return results;
 }
 
-function imagesWithTags(rows: { id: number }[]) {
-  if (rows.length === 0) return [];
-  const ids = rows.map((r) => r.id);
-  const placeholders = ids.map(() => "?").join(",");
-  const tagRows = db
-    .prepare(
-      `SELECT image_id, tag, source FROM image_tags WHERE image_id IN (${placeholders}) ORDER BY source DESC, tag`,
-    )
-    .all(...ids) as { image_id: number; tag: string; source: string }[];
-  const byId = new Map<number, { tag: string; source: string }[]>();
-  for (const t of tagRows) {
-    const arr = byId.get(t.image_id) ?? [];
-    arr.push({ tag: t.tag, source: t.source });
-    byId.set(t.image_id, arr);
-  }
-  return rows.map((r) => ({ ...r, tags: byId.get(r.id) ?? [] }));
-}
-
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -148,10 +126,6 @@ const server = Bun.serve({
   port: PORT,
   development: process.env.NODE_ENV !== "production",
   routes: {
-    "/": () => new Response(Bun.file("public/index.html")),
-    "/app.js": () => new Response(Bun.file("public/app.js")),
-    "/style.css": () => new Response(Bun.file("public/style.css")),
-
     "/images-cropped/:filename": (req) => {
       const { filename } = req.params;
       if (filename.includes("..") || filename.includes("/")) {
@@ -172,23 +146,6 @@ const server = Bun.serve({
       return new Response(Bun.file(filepath));
     },
 
-    "/api/stats": () => {
-      const row = db
-        .prepare(
-          `SELECT
-             sum(CASE WHEN deleted_at IS NULL THEN 1 ELSE 0 END) AS total,
-             sum(CASE WHEN deleted_at IS NULL AND local_filename IS NOT NULL THEN 1 ELSE 0 END) AS downloaded,
-             sum(CASE WHEN deleted_at IS NOT NULL THEN 1 ELSE 0 END) AS trashed
-           FROM images`,
-        )
-        .get() as { total: number; downloaded: number; trashed: number };
-      return jsonResponse({
-        total: row.total ?? 0,
-        downloaded: row.downloaded ?? 0,
-        trashed: row.trashed ?? 0,
-      });
-    },
-
     "/api/seed": {
       POST: async (req) => {
         const url = new URL(req.url);
@@ -206,58 +163,24 @@ const server = Bun.serve({
       },
     },
 
-    "/api/tags": () => {
-      const rows = db
-        .prepare(
-          `SELECT t.tag, count(*) AS count
-             FROM image_tags t
-             JOIN images i ON i.id = t.image_id
-            WHERE i.deleted_at IS NULL
-            GROUP BY t.tag
-            ORDER BY count DESC, t.tag`,
-        )
-        .all() as { tag: string; count: number }[];
-      return jsonResponse(rows);
-    },
-
     "/api/images": (req) => {
       const url = new URL(req.url);
-      const tag = url.searchParams.get("tag");
-      const downloaded = url.searchParams.get("downloaded");
-      const search = url.searchParams.get("search");
       const limit = Math.min(Number(url.searchParams.get("limit") ?? 200), 100000);
       const offset = Number(url.searchParams.get("offset") ?? 0);
 
-      const trash = url.searchParams.get("trash") === "1";
-
-      const conds: string[] = [trash ? `deleted_at IS NOT NULL` : `deleted_at IS NULL`];
-      const params: any[] = [];
-
-      if (tag) {
-        conds.push(`id IN (SELECT image_id FROM image_tags WHERE tag = ?)`);
-        params.push(tag);
-      }
-      if (downloaded === "1") conds.push(`local_filename IS NOT NULL`);
-      if (downloaded === "0") conds.push(`local_filename IS NULL`);
-      if (search) {
-        conds.push(`title LIKE ?`);
-        params.push(`%${search}%`);
-      }
-
-      const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
-      const total = (
-        db.prepare(`SELECT count(*) AS c FROM images ${where}`).get(...params) as { c: number }
-      ).c;
       const rows = db
         .prepare(
           `SELECT id, title, download_link, image_small, image_medium, image_large,
                   local_filename, downloaded_at, crop_filename, crop_x, crop_y, crop_size, tree_box_json
-             FROM images ${where}
+             FROM images
              ORDER BY id
              LIMIT ? OFFSET ?`,
         )
-        .all(...params, limit, offset) as { id: number }[];
-      return jsonResponse({ total, items: imagesWithTags(rows) });
+        .all(limit, offset) as { id: number }[];
+      const total = (
+        db.prepare(`SELECT count(*) AS c FROM images`).get() as { c: number }
+      ).c;
+      return jsonResponse({ total, items: rows });
     },
 
     "/api/images/:id": {
@@ -266,34 +189,11 @@ const server = Bun.serve({
         const row = db
           .prepare(
             `SELECT id, title, download_link, image_small, image_medium, image_large,
-                    local_filename, downloaded_at, deleted_at FROM images WHERE id = ?`,
+                    local_filename, downloaded_at FROM images WHERE id = ?`,
           )
           .get(id) as { id: number } | undefined;
         if (!row) return jsonResponse({ error: "not found" }, 404);
-        return jsonResponse(imagesWithTags([row])[0]);
-      },
-      DELETE: (req) => {
-        const id = Number(req.params.id);
-        const result = db
-          .prepare(
-            `UPDATE images SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL`,
-          )
-          .run(id);
-        if (result.changes === 0) {
-          const exists = db.prepare(`SELECT 1 FROM images WHERE id = ?`).get(id);
-          if (!exists) return jsonResponse({ error: "not found" }, 404);
-        }
-        return jsonResponse({ ok: true, deleted: result.changes });
-      },
-    },
-
-    "/api/images/:id/restore": {
-      POST: (req) => {
-        const id = Number(req.params.id);
-        const result = db
-          .prepare(`UPDATE images SET deleted_at = NULL WHERE id = ?`)
-          .run(id);
-        return jsonResponse({ ok: true, restored: result.changes });
+        return jsonResponse(row);
       },
     },
 
@@ -314,89 +214,17 @@ const server = Bun.serve({
       },
     },
 
-    "/api/export/zip": (req) => {
-      const url = new URL(req.url);
-      const tag = url.searchParams.get("tag");
-      const search = url.searchParams.get("search");
-
-      const conds: string[] = [`deleted_at IS NULL`, `local_filename IS NOT NULL`];
-      const params: any[] = [];
-      if (tag) {
-        conds.push(`id IN (SELECT image_id FROM image_tags WHERE tag = ?)`);
-        params.push(tag);
-      }
-      if (search) {
-        conds.push(`title LIKE ?`);
-        params.push(`%${search}%`);
-      }
-      const where = `WHERE ${conds.join(" AND ")}`;
-      const rows = db
-        .prepare(`SELECT local_filename FROM images ${where} ORDER BY id`)
-        .all(...params) as { local_filename: string }[];
-
-      if (rows.length === 0) {
-        return jsonResponse({ error: "no downloaded images to export" }, 400);
-      }
-
-      const filenames = rows.map((r) => r.local_filename);
-      const proc = Bun.spawn(["zip", "-q", "-@", "-"], {
-        cwd: IMAGES_DIR,
-        stdin: "pipe",
-        stdout: "pipe",
-        stderr: "inherit",
-      });
-      proc.stdin.write(filenames.join("\n") + "\n");
-      proc.stdin.end();
-
-      const ts = new Date().toISOString().slice(0, 10);
-      const slug = tag ? tag.toLowerCase().replace(/[^a-z0-9]+/g, "-") : "all";
-      const name = `images-${slug}-${ts}.zip`;
-
-      return new Response(proc.stdout, {
-        headers: {
-          "content-type": "application/zip",
-          "content-disposition": `attachment; filename="${name}"`,
-        },
-      });
-    },
-
     "/api/download-all": {
       POST: async () => {
         const rows = db
           .prepare(
-            `SELECT id FROM images WHERE local_filename IS NULL AND deleted_at IS NULL ORDER BY id`,
+            `SELECT id FROM images WHERE local_filename IS NULL ORDER BY id`,
           )
           .all() as { id: number }[];
         const results = await downloadMany(rows.map((r) => r.id));
         const ok = results.filter((r) => r.ok).length;
         const failed = results.filter((r) => !r.ok);
         return jsonResponse({ ok, failedCount: failed.length, failed });
-      },
-    },
-
-    "/api/images/:id/tags": {
-      POST: async (req) => {
-        const id = Number(req.params.id);
-        const body = (await req.json().catch(() => null)) as { tag?: string } | null;
-        const tag = body?.tag?.trim();
-        if (!tag) return jsonResponse({ error: "tag required" }, 400);
-        const exists = db.prepare(`SELECT 1 FROM images WHERE id = ?`).get(id);
-        if (!exists) return jsonResponse({ error: "image not found" }, 404);
-        db.prepare(
-          `INSERT OR IGNORE INTO image_tags (image_id, tag, source) VALUES (?, ?, 'user')`,
-        ).run(id, tag);
-        return jsonResponse({ ok: true, tag });
-      },
-    },
-
-    "/api/images/:id/tags/:tag": {
-      DELETE: (req) => {
-        const id = Number(req.params.id);
-        const tag = decodeURIComponent(req.params.tag);
-        const result = db
-          .prepare(`DELETE FROM image_tags WHERE image_id = ? AND tag = ?`)
-          .run(id, tag);
-        return jsonResponse({ ok: true, removed: result.changes });
       },
     },
 
@@ -476,7 +304,7 @@ const server = Bun.serve({
         const rows = db
           .prepare(
             `SELECT id FROM images
-             WHERE local_filename IS NOT NULL AND deleted_at IS NULL AND crop_filename IS NULL
+             WHERE local_filename IS NOT NULL AND crop_filename IS NULL
              ORDER BY id`,
           )
           .all() as { id: number }[];
