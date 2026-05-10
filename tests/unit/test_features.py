@@ -46,17 +46,17 @@ def test_extract_texture(dummy_tree_image):
 
 def test_extract_shape(dummy_tree_image):
     features = extract_shape(dummy_tree_image)
-    assert len(features) == 5
-    # Solidity for a circle + rect should be high
-    assert features[3] > 0.7
-    # Circularity for this shape should be less than 1.0 (it's not a perfect circle)
-    assert features[4] < 1.0
+    assert len(features) == 9
+    # Solidity for a circle + rect should be high (now at index 7)
+    assert features[7] > 0.7
+    # Circularity for this shape should be less than 1.0 (now at index 8)
+    assert features[8] < 1.0
 
 def test_full_extractor(tmp_path, dummy_tree_image):
     img_path = tmp_path / "test_tree.jpg"
     cv2.imwrite(str(img_path), dummy_tree_image)
     
     features = extract(img_path)
-    assert features.shape == (23,)
+    assert features.shape == (27,)
     assert features.dtype == np.float32
     assert not np.any(np.isnan(features))
