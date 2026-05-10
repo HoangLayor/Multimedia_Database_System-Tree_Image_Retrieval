@@ -23,7 +23,7 @@ class SearchEngine:
             ids_path=config["storage"]["image_ids_path"],
         )
         self.normalizer = Normalizer()
-        self.normalizer.load(config["storage"]["features_dir"])
+        self.normalizer.load(config["data"]["features_dir"])
         self._loaded = False
 
     def _ensure_loaded(self):
@@ -50,8 +50,11 @@ class SearchEngine:
         # 1. Trích chọn features
         raw_vec = extract(image_path)
 
-        # 2. Chuẩn hóa bằng cùng scaler đã dùng khi build index
-        norm_vec = self.normalizer.transform(raw_vec)
+        # 2. Chuẩn hóa bằng cùng scaler đã dùng khi build index (nếu có)
+        if self.normalizer.mean_ is not None:
+            norm_vec = self.normalizer.transform(raw_vec)
+        else:
+            norm_vec = raw_vec
 
         # 3. Vector search
         raw_results = self.vector_store.search(norm_vec, top_k=top_k)
@@ -71,6 +74,6 @@ class SearchEngine:
                     "common_name": img.common_name,
                     "age_class": img.age_class,
                     "similarity": round(r["score"], 4),
-                    "filepath": img.filepath,
+                    "file_path": img.file_path,
                 })
         return results

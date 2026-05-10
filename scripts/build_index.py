@@ -26,7 +26,8 @@ from src.storage.models import Image, Feature
 
 
 def main():
-    config = yaml.safe_load(open("configs/default.yaml"))
+    with open("configs/default.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
     processed_dir = Path(config["data"]["processed_dir"])
     features_dir  = Path(config["data"]["features_dir"])
     features_dir.mkdir(exist_ok=True)
@@ -46,7 +47,7 @@ def main():
     normalizer.save(str(features_dir))
 
     print("=== Step 4: Building FAISS index ===")
-    init_db(config["storage"]["db_path"])
+    init_db()
     with get_session() as session:
         image_ids = []
         for path in valid_paths:
