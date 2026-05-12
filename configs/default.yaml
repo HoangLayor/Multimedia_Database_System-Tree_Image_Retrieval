@@ -41,3 +41,10 @@ api:
   host: 0.0.0.0
   port: 8000
   max_upload_size_mb: 10
+
+minio:
+  endpoint: "localhost:9000"
+  access_key: "minioadmin"
+  secret_key: "minioadmin"
+  secure: false
+  bucket_name: "tree-images"

@@ -25,8 +25,16 @@ from src.storage.db import init_db, get_session
 from src.storage.models import Image, Feature
 
 
+import argparse
+
 def main():
-    config = yaml.safe_load(open("configs/default.yaml"))
+    parser = argparse.ArgumentParser(description="Build Search Index")
+    parser.add_argument("--method", type=str, choices=["faiss", "db", "both"], default="both",
+                        help="Lưu vào đâu? (faiss, db, both)")
+    args = parser.parse_args()
+
+    with open("configs/default.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
     processed_dir = Path(config["data"]["processed_dir"])
     features_dir  = Path(config["data"]["features_dir"])
     features_dir.mkdir(exist_ok=True)
@@ -45,22 +53,38 @@ def main():
     norm_matrix = normalizer.transform(matrix)
     normalizer.save(str(features_dir))
 
-    print("=== Step 4: Building FAISS index ===")
-    init_db(config["storage"]["db_path"])
-    with get_session() as session:
-        image_ids = []
-        for path in valid_paths:
-            img = session.query(Image).filter_by(filename=path.name).first()
-            if img:
-                image_ids.append(img.id)
-        image_ids = np.array(image_ids, dtype=np.int64)
+    print(f"=== Step 4: Saving features (Method: {args.method}) ===")
+    init_db()
+    
+    image_ids = []
+    # 1. Lưu vào DB nếu được yêu cầu
+    if args.method in ["db", "both"]:
+        with get_session() as session:
+            print("  Saving vectors to Database...")
+            session.query(Feature).delete()
+            for i, path in enumerate(valid_paths):
+                img = session.query(Image).filter_by(filename=path.name).first()
+                if img:
+                    image_ids.append(img.id)
+                    session.add(Feature(image_id=img.id, vector=norm_matrix[i].tolist()))
+            session.commit()
+    else:
+        # Nếu chỉ build FAISS, vẫn cần lấy list Image IDs để mapping
+        with get_session() as session:
+            for path in valid_paths:
+                img = session.query(Image).filter_by(filename=path.name).first()
+                if img: image_ids.append(img.id)
 
-    store = VectorStore(
-        index_path=config["storage"]["faiss_index_path"],
-        ids_path=config["storage"]["image_ids_path"],
-    )
-    store.build(norm_matrix, image_ids)
-    print(f"  Index built: {len(image_ids)} vectors")
+    # 2. Build FAISS nếu được yêu cầu
+    if args.method in ["faiss", "both"]:
+        print("  Building FAISS index...")
+        store = VectorStore(
+            index_path=config["storage"]["faiss_index_path"],
+            ids_path=config["storage"]["image_ids_path"],
+        )
+        store.build(norm_matrix, np.array(image_ids, dtype=np.int64))
+    
+    print(f"=== Done: Processed {len(image_ids)} images ===")
 
     print("=== Done ===")
 
