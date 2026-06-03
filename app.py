@@ -69,7 +69,7 @@ search_method = st.sidebar.selectbox(
 show_intermediate = st.sidebar.checkbox("Hiển thị kết quả trung gian", value=True)
 
 # --- Giao diện Chính ---
-st.title("🌳 Tree Image Search System")
+st.title("🌳 Hệ thống Tìm kiếm Ảnh Cây")
 st.markdown("### Hệ thống tìm kiếm và đánh giá đặc trưng cây dựa trên nội dung (CBIR)")
 
 uploaded_file = st.sidebar.file_uploader("Tải ảnh cây cần tìm kiếm...", type=["jpg", "jpeg", "png"])
@@ -87,7 +87,7 @@ if uploaded_file is not None:
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Ảnh Query")
+        st.subheader("Ảnh Truy vấn (Query)")
         st.image(img_rgb_resized, use_container_width=True)
         
     if show_intermediate:
@@ -117,11 +117,11 @@ if uploaded_file is not None:
                 # Hiển thị vector đặc trưng theo nhóm
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.write("**Geometry & Texture**")
+                    st.write("**Hình học & Kết cấu**")
                     st.json({FEATURE_NAMES[i]: round(float(features[i]), 4) for i in range(5)})
                     st.json({FEATURE_NAMES[i]: round(float(features[i]), 4) for i in range(14, 18)})
                 with c2:
-                    st.write("**Color & Shape**")
+                    st.write("**Màu sắc & Hình dáng**")
                     st.json({FEATURE_NAMES[i]: round(float(features[i]), 4) for i in range(5, 14)})
                     st.json({FEATURE_NAMES[i]: round(float(features[i]), 4) for i in range(18, 27)})
                 st.info(f"Thời gian trích xuất: {extract_time:.2f} ms")
@@ -130,7 +130,7 @@ if uploaded_file is not None:
                 v_col1, v_col2 = st.columns(2)
                 
                 with v_col1:
-                    st.write("**Hồ sơ Hình thái (Shape Profile)**")
+                    st.write("**Hồ sơ Hình thái**")
                     radar_labels = ['Mật độ tán', 'Độ đối xứng', 'Độ đặc (Solidity)', 'Độ tròn']
                     radar_values = [features[1], features[3], features[25], features[26]]
                     
@@ -145,7 +145,7 @@ if uploaded_file is not None:
                     st.plotly_chart(fig_radar, use_container_width=True)
 
                 with v_col2:
-                    st.write("**Màu sắc chủ đạo (Dominant Colors)**")
+                    st.write("**Màu sắc chủ đạo**")
                     tree_pixels = img_rgb_resized[mask > 0]
                     if len(tree_pixels) > 100:
                         sample_size = min(len(tree_pixels), 5000)
@@ -206,8 +206,8 @@ if uploaded_file is not None:
             with st.expander("⏱️ So sánh hiệu năng (Performance Benchmark)", expanded=True):
                 b_col1, b_col2 = st.columns([1, 2])
                 with b_col1:
-                    st.metric("FAISS (Index)", f"{time_faiss:.2f} ms", delta="Nhanh nhất", delta_color="normal")
-                    st.metric("DB (Sequential)", f"{time_db:.2f} ms", delta=f"{time_db/time_faiss:.1f}x chậm hơn", delta_color="inverse")
+                    st.metric("FAISS (Chỉ mục)", f"{time_faiss:.2f} ms", delta="Nhanh nhất", delta_color="normal")
+                    st.metric("CSDL (Tuần tự)", f"{time_db:.2f} ms", delta=f"{time_db/time_faiss:.1f}x chậm hơn", delta_color="inverse")
                 with b_col2:
                     bench_data = {"Phương pháp": ["FAISS (Index)", "DB (Sequential)"], "Thời gian (ms)": [time_faiss, time_db]}
                     st.bar_chart(bench_data, x="Phương pháp", y="Thời gian (ms)", color=["#2E7D32", "#FF4B4B"])
@@ -224,7 +224,7 @@ if uploaded_file is not None:
                 if not ("\\" in res_path or "/" in res_path):
                     img_url = storage.get_url(res_path)
                     if img_url:
-                        st.image(img_url, use_container_width=True, caption=f"Rank {res['rank']} - Similarity: {res['similarity']:.4f}")
+                        st.image(img_url, use_container_width=True, caption=f"Hạng {res['rank']} - Độ tương đồng: {res['similarity']:.4f}")
                     else:
                         st.error("Lỗi lấy ảnh từ MinIO")
                 else:
@@ -232,7 +232,7 @@ if uploaded_file is not None:
                     res_path_obj = Path(res_path)
                     if res_path_obj.exists():
                         res_img = PILImage.open(res_path_obj)
-                        st.image(res_img, use_container_width=True, caption=f"Rank {res['rank']} - Similarity: {res['similarity']:.4f}")
+                        st.image(res_img, use_container_width=True, caption=f"Hạng {res['rank']} - Độ tương đồng: {res['similarity']:.4f}")
                     else:
                         st.error(f"Không tìm thấy file: {res_path_obj.name}")
                 

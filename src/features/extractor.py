@@ -17,19 +17,19 @@ from .shape import extract_shape
 
 FEATURE_NAMES = [
     # Nhóm 1: Hình học (5)
-    "height_width_ratio", "canopy_density", "trunk_diameter",
-    "canopy_symmetry", "branch_angle_variance",
+    "tỷ_lệ_cao_rộng", "mật_độ_tán", "đường_kính_thân",
+    "độ_đối_xứng", "phương_sai_góc_cành",
     # Nhóm 2: Màu sắc (9)
-    "primary_green_hue", "green_saturation", "leaf_color_variance",
-    "brown_gray_ratio",
-    "color_hist_bin_1", "color_hist_bin_2", "color_hist_bin_3",
-    "color_hist_bin_4", "color_hist_bin_5",
-    # Nhóm 3: Texture (4)
-    "texture_coarseness", "contour_complexity", "edge_density", "texture_entropy",
+    "sắc_xanh_chủ_đạo", "độ_bão_hòa_xanh", "phương_sai_màu_lá",
+    "tỷ_lệ_nâu_xám",
+    "biểu_đồ_màu_bin_1", "biểu_đồ_màu_bin_2", "biểu_đồ_màu_bin_3",
+    "biểu_đồ_màu_bin_4", "biểu_đồ_màu_bin_5",
+    # Nhóm 3: Kết cấu (4)
+    "độ_nhám_kết_cấu", "độ_phức_tạp_đường_viền", "mật_độ_cạnh", "entropy_kết_cấu",
     # Nhóm 4: Hình dạng (9)
-    "hu_moment_1", "hu_moment_2", "hu_moment_3", "hu_moment_4",
-    "hu_moment_5", "hu_moment_6", "hu_moment_7",
-    "solidity", "circularity",
+    "moment_hu_1", "moment_hu_2", "moment_hu_3", "moment_hu_4",
+    "moment_hu_5", "moment_hu_6", "moment_hu_7",
+    "độ_đặc", "độ_tròn",
 ]
 
 DIM = len(FEATURE_NAMES)  # 27
