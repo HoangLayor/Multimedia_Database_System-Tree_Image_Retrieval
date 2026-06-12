@@ -66,6 +66,25 @@ search_method = st.sidebar.selectbox(
     ["FAISS (Vector Index)", "Database (Sequential Scan)", "So sánh hiệu năng (Benchmark)"],
     index=2
 )
+
+# Thêm UI Cấu hình Đồ thị
+with st.sidebar.expander("⚙️ Cấu hình FAISS HNSW (Nâng cao)", expanded=False):
+    st.markdown("**1. Tham số Tìm kiếm (Search)**")
+    ef_search = st.slider("efSearch (Độ rộng tìm kiếm)", min_value=16, max_value=256, value=16, step=8, help="Quyết định số lượng node được giữ trong queue khi tìm kiếm. Càng cao càng chính xác nhưng chậm hơn. (Khuyến nghị: Lớn hơn hoặc bằng Top-K)")
+    
+    st.markdown("**2. Tham số Đồ thị (Build)**")
+    with st.form("rebuild_faiss_form"):
+        M_val = st.slider("M (Số liên kết tối đa/node)", min_value=8, max_value=64, value=32, step=8, help="Số lượng liên kết của mỗi node. Ảnh hưởng tới độ dày của đồ thị và lượng RAM tiêu thụ.")
+        ef_construction = st.slider("efConstruction", min_value=16, max_value=200, value=40, step=8, help="Tầm nhìn khi thêm node mới vào đồ thị. Càng lớn đồ thị càng tốt nhưng build chậm.")
+        submitted = st.form_submit_button("Xây dựng lại FAISS Index", use_container_width=True)
+        
+    if submitted:
+        with st.spinner("Đang xây dựng lại đồ thị từ Database..."):
+            try:
+                engine.rebuild_index(M=M_val, ef_construction=ef_construction)
+                st.success(f"Đã build xong: M={M_val}, efConstruction={ef_construction}")
+            except Exception as e:
+                st.error(f"Lỗi: {e}")
 show_intermediate = st.sidebar.checkbox("Hiển thị kết quả trung gian", value=True)
 
 # --- Giao diện Chính ---
@@ -183,7 +202,7 @@ if uploaded_file is not None:
     with st.spinner(f"Đang tìm kiếm bằng {search_method}..."):
         if search_method == "FAISS (Vector Index)":
             start_time = time.time()
-            results_faiss = engine.search(temp_path, top_k=top_k)
+            results_faiss = engine.search(temp_path, top_k=top_k, ef_search=ef_search)
             exec_time = (time.time() - start_time) * 1000
             st.success(f"Tìm thấy kết quả bằng FAISS trong {exec_time:.2f} ms")
             
@@ -195,7 +214,7 @@ if uploaded_file is not None:
             
         else: # Benchmark mode
             start_faiss = time.time()
-            results_faiss = engine.search(temp_path, top_k=top_k)
+            results_faiss = engine.search(temp_path, top_k=top_k, ef_search=ef_search)
             time_faiss = (time.time() - start_faiss) * 1000
             
             start_db = time.time()
@@ -210,7 +229,7 @@ if uploaded_file is not None:
                     st.metric("CSDL (Tuần tự)", f"{time_db:.2f} ms", delta=f"{time_db/time_faiss:.1f}x chậm hơn", delta_color="inverse")
                 with b_col2:
                     bench_data = {"Phương pháp": ["FAISS (Index)", "DB (Sequential)"], "Thời gian (ms)": [time_faiss, time_db]}
-                    st.bar_chart(bench_data, x="Phương pháp", y="Thời gian (ms)", color=["#2E7D32", "#FF4B4B"])
+                    st.bar_chart(bench_data, x="Phương pháp", y="Thời gian (ms)", color="Phương pháp")
             st.success(f"Kết quả FAISS ({time_faiss:.2f} ms) vs DB Scan ({time_db:.2f} ms)")
     
     # Hiển thị kết quả dạng lưới (grid)

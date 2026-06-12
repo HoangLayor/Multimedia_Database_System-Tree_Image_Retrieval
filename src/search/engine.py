@@ -31,7 +31,7 @@ class SearchEngine:
             self.vector_store.load()
             self._loaded = True
 
-    def search(self, image_path: str | Path, top_k: int = 5) -> list[dict]:
+    def search(self, image_path: str | Path, top_k: int = 5, ef_search: int = 16) -> list[dict]:
         """
         Tìm TOP-K ảnh giống nhất với ảnh query.
 
@@ -57,7 +57,7 @@ class SearchEngine:
             norm_vec = raw_vec
 
         # 3. Vector search
-        raw_results = self.vector_store.search(norm_vec, top_k=top_k)
+        raw_results = self.vector_store.search(norm_vec, top_k=top_k, ef_search=ef_search)
 
         # 4. Enrich với metadata từ SQLite
         results = []
@@ -100,11 +100,15 @@ class SearchEngine:
             db_vectors = np.array([f.vector for f in db_features], dtype=np.float32)
             db_image_ids = [f.image_id for f in db_features]
             
-            # 3. Tính toán khoảng cách (Euclidean) tuần tự
-            distances = cdist(norm_feat, db_vectors, metric='euclidean').flatten()
+            # 3. Tính toán khoảng cách Cosine tuần tự
+            # cdist với metric='cosine' trả về Cosine Distance (1 - Cosine Similarity)
+            distances = cdist(norm_feat, db_vectors, metric='cosine').flatten()
             
-            # 4. Sắp xếp và lấy Top-K
-            indices = np.argsort(distances)[:top_k]
+            # Tính điểm tương đồng: Cosine Similarity = 1 - Cosine Distance
+            similarities = 1.0 - distances
+            
+            # 4. Sắp xếp và lấy Top-K (Sắp xếp giảm dần theo similarity)
+            indices = np.argsort(-similarities)[:top_k]
             
             results = []
             for rank, idx in enumerate(indices):
@@ -116,7 +120,29 @@ class SearchEngine:
                     "species": img.species,
                     "common_name": img.common_name,
                     "age_class": img.age_class,
-                    "similarity": float(1.0 / (1.0 + distances[idx])), # Giả lập similarity score
+                    "similarity": round(float(similarities[idx]), 4),
                     "rank": rank + 1
                 })
             return results
+
+    def rebuild_index(self, M: int = 32, ef_construction: int = 40):
+        """Build lại FAISS index từ SQLite database với tham số mới"""
+        from src.storage.db import get_session
+        from src.storage.models import Feature
+        
+        with get_session() as session:
+            db_features = session.query(Feature).all()
+            if not db_features:
+                raise ValueError("Không có vector nào trong cơ sở dữ liệu để build index.")
+            
+            db_vectors = np.array([f.vector for f in db_features], dtype=np.float32)
+            db_image_ids = np.array([f.image_id for f in db_features], dtype=np.int64)
+            
+            # Khởi tạo lại vector_store với config hiện tại
+            self.vector_store = VectorStore(
+                index_path=self.config["storage"]["faiss_index_path"],
+                ids_path=self.config["storage"]["image_ids_path"]
+            )
+            # Build
+            self.vector_store.build(db_vectors, db_image_ids, M=M, ef_construction=ef_construction)
+            self._loaded = True

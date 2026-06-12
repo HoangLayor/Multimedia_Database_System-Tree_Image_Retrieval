@@ -25,7 +25,7 @@ class VectorStore:
         self._index = None
         self._image_ids: np.ndarray | None = None
 
-    def build(self, vectors: np.ndarray, image_ids: np.ndarray) -> None:
+    def build(self, vectors: np.ndarray, image_ids: np.ndarray, M: int = 32, ef_construction: int = 40) -> None:
         """Xây dựng FAISS index từ ma trận features (N x dim)."""
         import faiss
 
@@ -34,13 +34,11 @@ class VectorStore:
         faiss.normalize_L2(vectors)  # chuẩn hóa để cosine = inner product
 
         # Sử dụng HNSW (Hierarchical Navigable Small World) theo yêu cầu
-        # M = 32: Số lượng liên kết tối đa trên mỗi node (thường 16-64)
-        M = 32
         index = faiss.IndexHNSWFlat(self.dim, M, faiss.METRIC_INNER_PRODUCT)
         
         # Tùy chỉnh tham số HNSW (tùy chọn)
         # efConstruction: Ảnh hưởng thời gian build và chất lượng (cao = tốt hơn nhưng build chậm)
-        # index.hnsw.efConstruction = 40 
+        index.hnsw.efConstruction = ef_construction
 
         index.add(vectors)
 
@@ -58,7 +56,7 @@ class VectorStore:
         self._image_ids = np.load(str(self.ids_path))
         return True
 
-    def search(self, query_vector: np.ndarray, top_k: int = 5) -> list[dict]:
+    def search(self, query_vector: np.ndarray, top_k: int = 5, ef_search: int = 16) -> list[dict]:
         """
         Returns: list of {"image_id": int, "score": float}
         score = cosine similarity [0, 1], cao hơn = giống hơn
@@ -70,6 +68,10 @@ class VectorStore:
         import faiss
         q = query_vector.astype(np.float32).reshape(1, -1)
         faiss.normalize_L2(q)
+
+        # Cập nhật efSearch (chỉ tác dụng nếu index là HNSW)
+        if hasattr(self._index, 'hnsw'):
+            self._index.hnsw.efSearch = ef_search
 
         scores, indices = self._index.search(q, top_k)
         results = []
